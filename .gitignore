@@ -139,6 +139,6 @@ dmypy.json
 cython_debug/
 
 config.json
-records.json
 config/
 .idea/
+exts/example.py

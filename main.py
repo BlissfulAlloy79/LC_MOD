@@ -2,17 +2,32 @@ import json
 import os
 import discord
 
+config_default = {
+  "token": None,
+  "guildID": None,
+  "commandChannel": None,
+  "announcementChannel": None,
+  "monitoringChannels": [],
+  "adminRoleID": None,
+  "SchemPath": None
+}
+
+if not os.path.exists('.\\config'):
+    os.makedirs('.\\config')
+if not os.path.exists('config.json'):
+    with open('config.json', 'w', encoding='utf-8') as j:
+        json.dump(config_default, j, indent=4)
+    print("Please fill in the config!")
+    exit()
+
 with open(r'config.json', encoding='utf-8') as f:
     cfg = json.load(f)
-
-gid = cfg["guildID"]
-alphabet = ["A", "B", "C", "D", "E", "F"]
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
-bot = discord.Bot(intents=intents, debug_guilds=[gid])
+bot = discord.Bot(intents=intents, debug_guilds=[cfg["guildID"]])
 
 
 def check_admin_role(ctx: discord.ApplicationContext):

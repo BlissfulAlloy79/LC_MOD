@@ -59,7 +59,7 @@ async def on_member_remove(member: discord.Member):
 
 @bot.event
 async def on_message_delete(message: discord.Message):
-    if message.channel in cfg["monitoringChannels"]:
+    if message.channel.id in cfg["monitoringChannels"]:
         msg = f"`{message.author}'s message was deleted`"
         await message.channel.send(msg)
 

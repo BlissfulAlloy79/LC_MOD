@@ -6,14 +6,13 @@ from main import check_admin_role
 from discord import option
 from discord.ext import commands
 
-
 blacklist = []
 agree_name_list = []
 disagree_name_list = []
 vote_embed = {}
-vote_status = 0
-vote_message: discord.Message
-result: dict
+vote_status = 0  # 0: no ongoing vote, 1: vote ongoing
+vote_message: discord.Message  # store the vote message for edit
+result: dict  # store the vote result as dict to send
 
 agree_msg = """
 You have chosen **Agree**!
@@ -49,7 +48,7 @@ class Confirm(discord.ui.View):
         self.stop()
 
 
-class VoteDoubleChoice(discord.ui.Modal):
+class DoubleChoiceModal(discord.ui.Modal):
     def __init__(self):
         super().__init__(title="Double Choice Voting")
 
@@ -78,7 +77,7 @@ class VoteDoubleChoice(discord.ui.Modal):
 
 # noinspection SpellCheckingInspection
 async def inventory_doublechoice_results():
-    global agree_name_list, disagree_name_list, vote_embed, result
+    global agree_name_list, disagree_name_list, vote_embed, result, vote_message
     color = discord.Color.gold()
     vote_result = "Failed"
     if len(agree_name_list) == len(disagree_name_list):
@@ -117,23 +116,29 @@ async def inventory_doublechoice_results():
     await vote_message.reply("Vote has ended, inventorying results...", embeds=[embed])
 
 
-class VoteChoicesDoubleChoice(discord.ui.View):
+class DoubleChoiceButton(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=86400)
 
     async def end_vote(self):
-        global vote_status
+        global vote_status, vote_message, vote_embed
+        vote_embed["title"] = "# ended-vote"
+        edit_embed = discord.Embed.from_dict(vote_embed)
+        await vote_message.edit(embeds=[edit_embed], view=DoubleChoiceDummyButton())
         await inventory_doublechoice_results()
         vote_status = 0
         self.stop()
 
     async def cancel_vote(self):
-        global vote_status
-        await self.message.reply("Vote was cancelled")
+        global vote_status, vote_message, vote_embed
+        vote_embed["title"] = "# cancelled-vote"
+        edit_embed = discord.Embed.from_dict(vote_embed)
+        await vote_message.edit(embeds=[edit_embed], view=DoubleChoiceDummyButton())
+        await vote_message.reply("Vote was cancelled")
         vote_status = 0
         self.stop()
 
-    @discord.ui.button(label=f"Agree", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Agree", style=discord.ButtonStyle.green)
     async def agree(self, button: discord.ui.Button, interaction: discord.Interaction):
         global agree_name_list, disagree_name_list, vote_message, vote_status, blacklist
         if vote_status == 1:
@@ -158,7 +163,7 @@ class VoteChoicesDoubleChoice(discord.ui.View):
         else:
             await interaction.response.send_message("There is no vote going on", ephemeral=True)
 
-    @discord.ui.button(label=f"Disagree", style=discord.ButtonStyle.red)
+    @discord.ui.button(label="Disagree", style=discord.ButtonStyle.red)
     async def disagree(self, button: discord.ui.Button, interaction: discord.Interaction):
         global agree_name_list, disagree_name_list, vote_message, vote_status, blacklist
         if vote_status == 1:
@@ -182,6 +187,19 @@ class VoteChoicesDoubleChoice(discord.ui.View):
                 await interaction.followup.send("Cancelled confirmation...", ephemeral=True)
         else:
             await interaction.response.send_message("There is no vote going on", ephemeral=True)
+
+
+class DoubleChoiceDummyButton(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=3)
+
+    @discord.ui.button(label="Agree", style=discord.ButtonStyle.green, disabled=True)
+    async def agree(self):
+        pass
+
+    @discord.ui.button(label="Disagree", style=discord.ButtonStyle.red, disabled=True)
+    async def disagree(self):
+        pass
 
 
 class Vote(commands.Cog):
@@ -214,12 +232,12 @@ class Vote(commands.Cog):
                 if vote_type == "Double(Agree/Disagree)":
                     agree_name_list.clear()
                     disagree_name_list.clear()
-                    modal = VoteDoubleChoice()
+                    modal = DoubleChoiceModal()
                     await ctx.send_modal(modal)
                     await modal.wait()
                     embed = discord.Embed.from_dict(vote_embed)
                     # print(vote_embed)
-                    message = await ctx.send("Vote:", embeds=[embed], view=VoteChoicesDoubleChoice())
+                    message = await ctx.send("Vote:", embeds=[embed], view=DoubleChoiceButton())
                     vote_message = message
                     # await ctx.send(str(message.id))
                 elif vote_type == "Multiple(Multiple Choice)":
@@ -238,7 +256,7 @@ class Vote(commands.Cog):
                 await ctx.respond("There is no ongoing vote")
             elif vote_status == 1:
                 await ctx.respond("Processing...")
-                await VoteChoicesDoubleChoice().end_vote()
+                await DoubleChoiceButton().end_vote()
                 vote_status = 0
         else:
             await ctx.respond(f"{ctx.author.mention}, you don't have permission!")
@@ -278,8 +296,21 @@ class Vote(commands.Cog):
         else:
             await ctx.respond(f"{ctx.author.mention}, you don't have permission!")
 
+    @commands.slash_command(name="vote-cancel", description="Cancel a ongoing vote")
+    async def vote_cancel(self, ctx: discord.ApplicationContext):
+        global vote_status
+        print(f"{ctx.user} executed /vote-cancel in {ctx.channel}")
+        if check_admin_role(ctx) is False:
+            await ctx.respond(f"{ctx.author.mention}, you don't have permission!")
+        elif check_admin_role(ctx):
+            if vote_status == 0:
+                await ctx.respond("There is no ongoing vote")
+            elif vote_status == 1:
+                await ctx.respond("Cancelling vote...")
+                await DoubleChoiceButton().cancel_vote()
+
 
 def setup(bot):
     bot.add_cog(Vote(bot))
 
-# cancel vote
+# vote multiple choice
